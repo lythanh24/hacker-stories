@@ -72,24 +72,21 @@ function Search() {
 
 const SearchForm = (props) => {
 
-  const [searchTerm, setSearchTerm] = React.useState(0);
-
-  const handleChange = (event) => {
-    setSearchTerm(event.target.value);
-    // B
-    props.onSearch(event);
-  };
-  
   const handleClick = (event) => {
     setCount(count + 1);
     console.log("Button Clicked");
+
+    for (var k in props) {
+      console.log(k, props[k]);
+    }
+
   }
-  
+
   return (
     <div>
       Count: {count}
       <label htmlFor="search">Form: </label>
-      <input id="search" type="text" onChange={handleChange} />
+      <input id="search" type="text" value={props.search} onChange={props.onSearch} />
       <button type="button" onClick={handleClick}>
         Event Handler
       </button>
@@ -97,15 +94,28 @@ const SearchForm = (props) => {
   );
 }
 
-
-
 function App() {
 
   [count, setCount] = React.useState(0);
+  
+  const useSemiPersistentState = (key, initialState) => {
+
+    const [value, setValue] = React.useState(
+      localStorage.getItem(key) || initialState
+    );
+
+    React.useEffect(() => {
+      localStorage.setItem(key, value);
+    }, [value, key]);
+
+    return [value, setValue];
+  };
+
+  const [searchTerm, setSearchTerm] = useSemiPersistentState('search', 'React');
 
   const stories = [
     {
-      title: 'ReactJS',
+      title: 'ReactJS So once you know about',
       url: 'https://reactjs.org/',
       author: 'Jordan Walke',
       num_comments: 3,
@@ -113,36 +123,44 @@ function App() {
       objectID: 0,
     },
     {
-      title: 'Redux',
+      title: 'Redux your problem which',
       url: 'https://redux.js.org/',
       author: 'Dan Abramov, Andrew Clark',
       num_comments: 2,
       points: 5,
       objectID: 1
     }, {
-      title: 'Redhad',
+      title: 'Redhad needs to be solved',
       url: 'https://redux.js.org/',
       author: 'Linux Toward',
       num_comments: 2,
       points: 5,
-      objectID: 1
+      objectID: 2
     }, {
-      title: 'Cup',
+      title: 'Cup should give you plenty of options solving it',
       url: 'https://redux.js.org/',
       author: 'Ceramix',
       num_comments: 2,
       points: 5,
-      objectID: 1
+      objectID: 3
     },
   ];
-
   function getTile(title) {
     return title;
   };
 
+  React.useEffect(() => {
+    localStorage.setItem('search', searchTerm);
+  }, [searchTerm]);
+
   const handleSearch = (event) => {
-    console.log("App ",event.target.value);
+    console.log("App ", event.target.value);
+    setSearchTerm(event.target.value);
   }
+
+  const searchedStories = stories.filter(function (story) {
+    return story.title.toLowerCase().includes(searchTerm);
+  });
 
   return (
     <div>
@@ -151,15 +169,12 @@ function App() {
       <h2>{welcome.greeting} {welcome.tile}</h2>
       <h2>{getTile("Mr.")} {welcome.tile}</h2>
       <hr />
-      <Search />
+
+      <SearchForm search={searchTerm} onSearch={handleSearch} />
 
       <hr />
 
-      <SearchForm onSearch={handleSearch} />
-
-      <hr />
-
-      <List list={stories} />
+      <List list={searchedStories} />
 
       <hr />
 
