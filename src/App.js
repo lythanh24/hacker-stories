@@ -1,184 +1,261 @@
 import * as React from 'react';
+import axios from 'axios';
+import { sortBy } from 'lodash';
+import './App.css';
 
-var count, setCount;
+const API_ENDPOINT = 'https://hn.algolia.com/api/v1/search?query=';
 
-const name = "Robert Lee";
-
-const welcome = {
-  greeting: `Hey`,
-  tile: `React`,
-};
-
-const list = [
-  {
-    title: 'ReactJS',
-    url: 'https://reactjs.org/',
-    author: 'Jordan Walke',
-    num_comments: 3,
-    points: 4,
-    objectID: 0,
-  },
-  {
-    title: 'Redux',
-    url: 'https://redux.js.org/',
-    author: 'Dan Abramov, Andrew Clark',
-    num_comments: 2,
-    points: 5,
-    objectID: 1
-  }, {
-    title: 'Redhad',
-    url: 'https://redux.js.org/',
-    author: 'Linux Toward',
-    num_comments: 2,
-    points: 5,
-    objectID: 1
-  }, {
-    title: 'Cup',
-    url: 'https://redux.js.org/',
-    author: 'Ceramix',
-    num_comments: 2,
-    points: 5,
-    objectID: 1
-  },
-];
-
-function List(props) {
-  return (
-    <ul>
-      {props.list.map(function (item) {
-        return (
-          <li key={item.objectID}>
-            <span>
-              <a href={item.url}>{item.title}</a>
-            </span>
-            <span>{item.author}</span>
-            <span>{item.num_comments}</span>
-            <span>{item.points}</span>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function Search() {
-  return (
-    <div>
-      <label htmlFor="search">Search: </label>
-      <input id="search" type="text" />
-    </div>
-  );
-}
-
-const SearchForm = (props) => {
-
-  const handleClick = (event) => {
-    setCount(count + 1);
-    console.log("Button Clicked");
-
-    for (var k in props) {
-      console.log(k, props[k]);
-    }
-
-  }
-
-  return (
-    <div>
-      Count: {count}
-      <label htmlFor="search">Form: </label>
-      <input id="search" type="text" value={props.search} onChange={props.onSearch} />
-      <button type="button" onClick={handleClick}>
-        Event Handler
-      </button>
-    </div>
-  );
-}
-
-function App() {
-
-  [count, setCount] = React.useState(0);
-  
-  const useSemiPersistentState = (key, initialState) => {
-
+const useSemiPersistentState = (key, initialState) => {
     const [value, setValue] = React.useState(
-      localStorage.getItem(key) || initialState
+        localStorage.getItem(key) || initialState
     );
 
     React.useEffect(() => {
-      localStorage.setItem(key, value);
+        localStorage.setItem(key, value);
     }, [value, key]);
 
     return [value, setValue];
-  };
+};
 
-  const [searchTerm, setSearchTerm] = useSemiPersistentState('search', 'React');
+const storiesReducer = (state, action) => {
+    switch (action.type) {
+        case 'STORIES_FETCH_INIT':
+            return {
+                ...state,
+                isLoading: true,
+                isError: false,
+            };
+        case 'STORIES_FETCH_SUCCESS':
+            return {
+                ...state,
+                isLoading: false,
+                isError: false,
+                data: action.payload,
+            };
+        case 'STORIES_FETCH_FAILURE':
+            return {
+                ...state,
+                isLoading: false,
+                isError: true,
+            };
+        case 'REMOVE_STORY':
+            return {
+                ...state,
+                data: state.data.filter(
+                    (story) => action.payload.objectID !== story.objectID
+                ),
+            };
+        default:
+            throw new Error();
+    }
+};
 
-  const stories = [
-    {
-      title: 'ReactJS So once you know about',
-      url: 'https://reactjs.org/',
-      author: 'Jordan Walke',
-      num_comments: 3,
-      points: 4,
-      objectID: 0,
-    },
-    {
-      title: 'Redux your problem which',
-      url: 'https://redux.js.org/',
-      author: 'Dan Abramov, Andrew Clark',
-      num_comments: 2,
-      points: 5,
-      objectID: 1
-    }, {
-      title: 'Redhad needs to be solved',
-      url: 'https://redux.js.org/',
-      author: 'Linux Toward',
-      num_comments: 2,
-      points: 5,
-      objectID: 2
-    }, {
-      title: 'Cup should give you plenty of options solving it',
-      url: 'https://redux.js.org/',
-      author: 'Ceramix',
-      num_comments: 2,
-      points: 5,
-      objectID: 3
-    },
-  ];
-  function getTile(title) {
-    return title;
-  };
+const App = () => {
+    const [searchTerm, setSearchTerm] = useSemiPersistentState(
+        'search',
+        'React'
+    );
 
-  React.useEffect(() => {
-    localStorage.setItem('search', searchTerm);
-  }, [searchTerm]);
+    const [url, setUrl] = React.useState(
+        `${API_ENDPOINT}${searchTerm}`
+    );
 
-  const handleSearch = (event) => {
-    console.log("App ", event.target.value);
-    setSearchTerm(event.target.value);
-  }
+    const [stories, dispatchStories] = React.useReducer(
+        storiesReducer,
+        { data: [], isLoading: false, isError: false }
+    );
 
-  const searchedStories = stories.filter(function (story) {
-    return story.title.toLowerCase().includes(searchTerm);
-  });
+    const handleFetchStories = React.useCallback(async () => {
+        dispatchStories({ type: 'STORIES_FETCH_INIT' });
 
-  return (
-    <div>
-      <h1>Hello World {name}</h1>
-      <h2>Count: {count}</h2>
-      <h2>{welcome.greeting} {welcome.tile}</h2>
-      <h2>{getTile("Mr.")} {welcome.tile}</h2>
-      <hr />
+        try {
+            const result = await axios.get(url);
 
-      <SearchForm search={searchTerm} onSearch={handleSearch} />
+            dispatchStories({
+                type: 'STORIES_FETCH_SUCCESS',
+                payload: result.data.hits,
+            });
+        } catch {
+            dispatchStories({ type: 'STORIES_FETCH_FAILURE' });
+        }
+    }, [url]);
 
-      <hr />
+    React.useEffect(() => {
+        handleFetchStories();
+    }, [handleFetchStories]);
 
-      <List list={searchedStories} />
+    const handleRemoveStory = (item) => {
+        dispatchStories({
+            type: 'REMOVE_STORY',
+            payload: item,
+        });
+    };
 
-      <hr />
+    const handleSearchInput = (event) => {
+        setSearchTerm(event.target.value);
+    };
 
-    </div>
-  );
-}
+    const handleSearchSubmit = (event) => {
+        setUrl(`${API_ENDPOINT}${searchTerm}`);
+
+        event.preventDefault();
+    };
+
+    return (
+        <div className="container">
+            <h1 className="headline-primary">My Hacker Stories</h1>
+
+            <SearchForm
+                searchTerm={searchTerm}
+                onSearchInput={handleSearchInput}
+                onSearchSubmit={handleSearchSubmit}
+            />
+
+            <hr />
+
+            {stories.isError && <p>Something went wrong ...</p>}
+
+            {stories.isLoading ? (
+                <p>Loading ...</p>
+            ) : (
+                <List list={stories.data} onRemoveItem={handleRemoveStory} />
+            )}
+        </div>
+    );
+};
+
+const SearchForm = ({
+    searchTerm,
+    onSearchInput,
+    onSearchSubmit,
+}) => (
+    <form onSubmit={onSearchSubmit}>
+        <InputWithLabel
+            id="search"
+            value={searchTerm}
+            isFocused
+            onInputChange={onSearchInput}
+        >
+            <strong>Search:</strong>
+        </InputWithLabel>
+
+        <button type="submit" disabled={!searchTerm}>
+            Submit
+        </button>
+    </form>
+);
+
+const InputWithLabel = ({
+    id,
+    value,
+    type = 'text',
+    onInputChange,
+    isFocused,
+    children,
+}) => {
+    const inputRef = React.useRef();
+
+    React.useEffect(() => {
+        if (isFocused && inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, [isFocused]);
+
+    return (
+        <>
+            <label htmlFor={id}>{children}</label>
+            &nbsp;
+            <input
+                id={id}
+                ref={inputRef}
+                type={type}
+                value={value}
+                onChange={onInputChange}
+            />
+        </>
+    );
+};
+
+const SORTS = {
+    NONE: (list) => list,
+    TITLE: (list) => sortBy(list, 'title'),
+    AUTHOR: (list) => sortBy(list, 'author'),
+    COMMENT: (list) => sortBy(list, 'num_comments').reverse(),
+    POINT: (list) => sortBy(list, 'points').reverse(),
+};
+
+const List = ({ list, onRemoveItem }) => {
+
+    const [sort, setSort] = React.useState('NONE');
+
+    const handleSort = (sortKey) => {
+        setSort(sortKey);
+    };
+
+    const sortFunction = SORTS[sort];
+    const sortedList = sortFunction(list);
+
+    return (
+        <div>
+            <div>
+                <span>
+                    <button type="button" onClick={() => handleSort('TITLE')}>
+                        Title
+                    </button>
+                </span>
+                <span>
+                    <button type="button" onClick={() => handleSort('AUTHOR')}>
+                        Author
+                    </button>
+                </span>
+                <span>
+                    <button type="button" onClick={() => handleSort('COMMENT')}>
+                        Comments
+                    </button>
+                </span>
+                <span>
+                    <button type="button" onClick={() => handleSort('POINT')}>
+                        Points
+                    </button>
+                </span>
+                <span>Actions</span>
+            </div>
+            <ul>
+                <li style={{ display: 'flex' }}>
+                    <span style={{ width: '40%' }}>Title</span>
+                    <span style={{ width: '30%' }}>Author</span>
+                    <span style={{ width: '10%' }}>Comments</span>
+                    <span style={{ width: '10%' }}>Points</span>
+                    <span style={{ width: '10%' }}>Actions</span>
+                </li>
+                {sortedList.map((item) => (
+                    <Item
+                        key={item.objectID}
+                        item={item}
+                        onRemoveItem={onRemoveItem}
+                    />
+                ))}
+            </ul>
+        </div>
+    );
+
+};
+
+const Item = ({ item, onRemoveItem }) => (
+
+    <li style={{ display: 'flex' }}>
+        <span style={{ width: '40%' }}>
+            <a href={item.url}>{item.title}</a>
+        </span>
+        <span style={{ width: '30%' }}>{item.author}</span>
+        <span style={{ width: '10%' }}>{item.num_comments}</span>
+        <span style={{ width: '10%' }}>{item.points}</span>
+        <span style={{ width: '10%' }}>
+            <button type="button" onClick={() => onRemoveItem(item)}>
+                Dismiss
+            </button>
+        </span>
+    </li>
+);
+
 export default App;
